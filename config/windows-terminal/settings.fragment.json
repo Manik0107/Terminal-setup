@@ -1,0 +1,109 @@
+{
+  "//": "Windows Terminal fragment merged into settings.json by install.ps1.",
+  "//keys": "install.ps1 merges 'schemes' by name, 'profiles.defaults' key-by-key, and 'actions' by keys chord. Everything else in your settings.json is left untouched. Your original is backed up first.",
+  "//nobind": "Deliberately NOT bound here: ctrl+a and ctrl+h/j/k/l. You run WSL inside this terminal, and Windows Terminal consumes a chord before the shell ever sees it. Binding either would mean herdr/tmux never receive its prefix or its pane-focus keys. WT's own pane keys therefore live on alt+arrows instead.",
+
+  "profiles": {
+    "defaults": {
+      "font": {
+        "face": "0xProto Nerd Font Mono",
+        "size": 18
+      },
+      "colorScheme": "Terminal Setup Dark",
+      "padding": "6, 4, 6, 4",
+      "scrollbarState": "hidden",
+      "historySize": 10000,
+      "useAcrylic": false,
+      "antialiasingMode": "grayscale"
+    }
+  },
+
+  "schemes": [
+    {
+      "//": "Same palette as ghostty/config.shared: #0a0a0a ground, #22d3ee cyan accent, #163b44 selection.",
+      "name": "Terminal Setup Dark",
+      "background": "#0A0A0A",
+      "foreground": "#E6E6E6",
+      "cursorColor": "#22D3EE",
+      "selectionBackground": "#163B44",
+
+      "black": "#0A0A0A",
+      "red": "#FF5555",
+      "green": "#A5D6A7",
+      "yellow": "#FFE873",
+      "blue": "#8BE9FD",
+      "purple": "#FF79C6",
+      "cyan": "#22D3EE",
+      "white": "#E6E6E6",
+
+      "brightBlack": "#6B7280",
+      "brightRed": "#FF6E6E",
+      "brightGreen": "#C3E88D",
+      "brightYellow": "#FFD866",
+      "brightBlue": "#A4E4FD",
+      "brightPurple": "#FF92D0",
+      "brightCyan": "#67E8F9",
+      "brightWhite": "#FFFFFF"
+    }
+  ],
+
+  "actions": [
+    {
+      "//": "Splits mirror herdr/tmux intent (| side-by-side, - stacked) but on alt+shift, since ctrl+a is reserved for the WSL multiplexer prefix.",
+      "command": { "action": "splitPane", "split": "vertical", "splitMode": "duplicate" },
+      "keys": "alt+shift+|"
+    },
+    {
+      "command": { "action": "splitPane", "split": "horizontal", "splitMode": "duplicate" },
+      "keys": "alt+shift+-"
+    },
+    {
+      "//": "Pane focus on alt+arrows, NOT ctrl+h/j/k/l — see //nobind above.",
+      "command": { "action": "moveFocus", "direction": "left" },
+      "keys": "alt+left"
+    },
+    {
+      "command": { "action": "moveFocus", "direction": "down" },
+      "keys": "alt+down"
+    },
+    {
+      "command": { "action": "moveFocus", "direction": "up" },
+      "keys": "alt+up"
+    },
+    {
+      "command": { "action": "moveFocus", "direction": "right" },
+      "keys": "alt+right"
+    },
+    {
+      "//": "Same chord as ghostty's ctrl+shift+m=toggle_maximize. Safe inside WSL too: herdr's zoom is prefix+m (ctrl+a m), so the two never collide.",
+      "command": "togglePaneZoom",
+      "keys": "ctrl+shift+m"
+    },
+    {
+      "//": "Resize on alt+shift+arrows, the analogue of herdr/tmux prefix+h/j/k/l.",
+      "command": { "action": "resizePane", "direction": "left" },
+      "keys": "alt+shift+left"
+    },
+    {
+      "command": { "action": "resizePane", "direction": "down" },
+      "keys": "alt+shift+down"
+    },
+    {
+      "command": { "action": "resizePane", "direction": "up" },
+      "keys": "alt+shift+up"
+    },
+    {
+      "command": { "action": "resizePane", "direction": "right" },
+      "keys": "alt+shift+right"
+    },
+    {
+      "//": "Parity with ghostty's keybind = ctrl+v=paste_from_clipboard.",
+      "command": "paste",
+      "keys": "ctrl+v"
+    },
+    {
+      "command": { "action": "copy", "singleLine": false },
+      "keys": "ctrl+shift+c"
+    }
+  ]
+}
