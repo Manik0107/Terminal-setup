@@ -1,4 +1,4 @@
-# PowerShell 7 profile — native Windows counterpart to config/zsh/.zshrc
+# PowerShell 7 profile - native Windows counterpart to config/zsh/.zshrc
 #
 # Installed by install.ps1 to $PROFILE.CurrentUserAllHosts.
 # Reload without restarting: . $PROFILE
@@ -29,7 +29,7 @@ if (Get-Module -ListAvailable -Name PSReadLine) {
   # emacs bindings, so this is what makes ctrl+a, ctrl+e, ctrl+w, ctrl+u and
   # ctrl+r behave the same on Windows as in zsh.
   # NOTE: ctrl+a is beginning-of-line here. It is the multiplexer prefix only
-  # inside herdr/tmux, which do not exist natively on Windows — so there is no
+  # inside herdr/tmux, which do not exist natively on Windows - so there is no
   # collision, but the key does mean two different things depending on whether
   # you are in native pwsh or in WSL.
   Set-PSReadLineOption -EditMode Emacs
@@ -77,7 +77,7 @@ if (Get-Command eza -ErrorAction SilentlyContinue) {
   function lt { eza --tree --level=2 --icons @args }
 }
 
-# Matches EZA_COLORS in .zshrc — everything in cyan.
+# Matches EZA_COLORS in .zshrc - everything in cyan.
 $env:EZA_COLORS = 'di=1;36:fi=1;36:ln=1;36:ex=1;36:pi=1;36:so=1;36:bd=1;36:cd=1;36:su=1;36:sg=1;36:da=1;36:ur=1;36:uw=1;36:ux=1;36:gr=1;36:gw=1;36:gx=1;36:tr=1;36:tw=1;36:tx=1;36'
 
 # ---- z ---------------------------------------------------------------------
@@ -110,7 +110,7 @@ if (Get-Command wsl.exe -ErrorAction SilentlyContinue) {
 
 # ---- Local overrides -------------------------------------------------------
 # Counterpart to ~/.zshrc.local: secrets, tokens, machine-only paths.
-# Gitignored — never commit it.
+# Gitignored - never commit it.
 $LocalProfile = Join-Path (Split-Path $PROFILE.CurrentUserAllHosts) 'profile.local.ps1'
 if (Test-Path $LocalProfile) { . $LocalProfile }
 
