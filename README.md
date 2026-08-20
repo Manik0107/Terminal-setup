@@ -112,7 +112,58 @@ directive that would let a shared file stay portable. Edit the repo templates,
 then re-run `install.sh` — editing the generated file directly means losing it
 on the next run.
 
-## Options
+## Installing only what you want
+
+Nothing is all-or-nothing. Components are named, and you pick them with
+`--only` (exactly these) or `--skip` (everything but these). `--list` prints
+them.
+
+```bash
+bash install.sh --skip tmux                 # on herdr, tmux is redundant
+bash install.sh --skip nvim,opencode        # keep your own editor setup
+bash install.sh --only zsh,prompt,herdr     # minimal shell + multiplexer
+bash install.sh --only nvim                 # just the editor and its config
+bash install.sh --list
+```
+
+| Component | Installs | Places |
+|---|---|---|
+| `core` | zsh, git, curl, wget, unzip, build tools, python3 | — |
+| `cli` | ripgrep, fd, fzf, btop, eza | — |
+| `font` | 0xProto Nerd Font | — |
+| `zsh` | Oh My Zsh + 2 plugins, sets login shell | `.zshrc`, `.zprofile` |
+| `prompt` | Oh My Posh | `omp-config/myconfig.json` |
+| `herdr` | herdr binary + zsh completions | `~/.config/herdr/config.toml` |
+| `tmux` | tmux, TPM + plugins | `.tmux.conf`, `start-tmux-workspace` |
+| `nvim` | Neovim + headless plugin sync | `~/.config/nvim` |
+| `ghostty` | Ghostty | `~/.config/ghostty/config` |
+| `opencode` | OpenCode CLI | `~/.config/opencode/opencode.jsonc` |
+
+Aliases are accepted for near-misses: `neovim`/`vim`, `omp`/`oh-my-posh`,
+`omz`/`shell`, `fonts`, `tools`.
+
+Windows uses the same model with eight components — `core`, `cli`, `font`,
+`pwsh`, `prompt`, `nvim`, `terminal`, `wsl`:
+
+```powershell
+.\install.ps1 -Skip nvim,terminal
+.\install.ps1 -Only pwsh,prompt,font
+.\install.ps1 -List
+.\install.ps1 -WithWSL -WSLArgs '--skip tmux,nvim'   # scope both sides
+```
+
+Two rules worth knowing:
+
+- **`--only` means only.** It will not quietly pull in `core` to satisfy a
+  dependency. If `git` or `curl` is missing you get a warning naming it, not a
+  surprise `apt`/`brew` run.
+- **A typo is fatal.** `--only nvimm` exits 1 and prints the component list,
+  rather than silently installing nothing.
+- **`wsl` is opt-in.** It is excluded from a default Windows run, and `-Skip`
+  subtracts from that default — so `-Skip nvim` will never start installing a
+  distro behind your back. Use `-WithWSL` or `-Only wsl`.
+
+## Other options
 
 ```bash
 bash install.sh --configs-only         # link/render configs, install nothing
@@ -121,9 +172,7 @@ bash install.sh --help
 ```
 
 ```powershell
-.\install.ps1 -WithWSL                 # also set up WSL for full parity
 .\install.ps1 -ConfigsOnly             # place configs, install nothing
-.\install.ps1 -SkipWindowsTerminal     # do not touch settings.json
 .\install.ps1 -WSLDistro Debian        # non-default distro
 Get-Help .\install.ps1 -Detailed
 ```
