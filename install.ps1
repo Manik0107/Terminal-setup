@@ -15,33 +15,56 @@
   machines. Native Windows gets matching shell editing keys, prompt, colours,
   font and Neovim bindings.
 
+.PARAMETER Only
+  Install ONLY these components. Mutually exclusive with -Skip.
+  Names: core, cli, font, pwsh, prompt, nvim, terminal, wsl
+
+.PARAMETER Skip
+  Install everything EXCEPT these components. Mutually exclusive with -Only.
+
+.PARAMETER List
+  List components and exit.
+
 .PARAMETER WithWSL
-  Also install WSL + a distro and run install.sh inside it. This is what gives
-  you identical multiplexer keybindings.
+  Shorthand for adding the 'wsl' component: installs WSL + a distro and runs
+  install.sh inside it. This is what gives you identical multiplexer
+  keybindings. The Linux side accepts its own --only/--skip via -WSLArgs.
+
+.PARAMETER WSLArgs
+  Extra arguments passed straight through to install.sh inside WSL, e.g.
+  -WSLArgs '--skip tmux,opencode'.
 
 .PARAMETER ConfigsOnly
   Place configs only; install no packages.
 
 .PARAMETER SkipWindowsTerminal
-  Do not touch Windows Terminal's settings.json. Merging rewrites that file
-  (dropping any comments in it), so this is the opt-out. A timestamped backup is
-  always taken otherwise.
+  Deprecated alias for -Skip terminal. Kept so existing commands keep working.
 
 .PARAMETER WSLDistro
-  Distro for -WithWSL. Defaults to Ubuntu.
+  Distro for the wsl component. Defaults to Ubuntu.
 
 .EXAMPLE
   .\install.ps1
 .EXAMPLE
   .\install.ps1 -WithWSL
+.EXAMPLE
+  .\install.ps1 -Skip nvim,terminal
+.EXAMPLE
+  .\install.ps1 -Only pwsh,prompt,font
+.EXAMPLE
+  .\install.ps1 -WithWSL -WSLArgs '--skip tmux,nvim'
 #>
 
 [CmdletBinding()]
 param(
-  [switch] $WithWSL,
-  [switch] $ConfigsOnly,
-  [switch] $SkipWindowsTerminal,
-  [string] $WSLDistro = 'Ubuntu'
+  [string[]] $Only,
+  [string[]] $Skip,
+  [switch]   $List,
+  [switch]   $WithWSL,
+  [string]   $WSLArgs = '',
+  [switch]   $ConfigsOnly,
+  [switch]   $SkipWindowsTerminal,
+  [string]   $WSLDistro = 'Ubuntu'
 )
 
 Set-StrictMode -Version Latest
@@ -59,6 +82,114 @@ function Write-Err  { param([string]$Message) Write-Host "`n[terminal-setup] ERR
 function Test-Command {
   param([string]$Name)
   [bool](Get-Command $Name -ErrorAction SilentlyContinue)
+}
+
+# ---- Component selection ---------------------------------------------------
+
+# Dependency order: core provides git and pwsh that later components rely on,
+# and wsl runs last because it hands off to the Linux installer.
+$AllComponents = @('core', 'cli', 'font', 'pwsh', 'prompt', 'nvim', 'terminal', 'wsl')
+
+$ComponentHelp = [ordered]@{
+  core     = 'PowerShell 7, Git'
+  cli      = 'eza, fzf, ripgrep, fd, zoxide'
+  font     = '0xProto Nerd Font (per-user, no admin)'
+  pwsh     = 'PSReadLine + PSFzf, the PowerShell profile'
+  prompt   = 'Oh My Posh + the shared theme'
+  nvim     = 'Neovim, LazyVim config, headless plugin sync'
+  terminal = "Windows Terminal + merge colours/font/keys into settings.json"
+  wsl      = 'WSL distro, then runs install.sh inside it (full keybinding parity)'
+}
+
+function Show-Components {
+  Write-Host 'Components:'
+  foreach ($key in $ComponentHelp.Keys) {
+    Write-Host ('  {0,-9} {1}' -f $key, $ComponentHelp[$key])
+  }
+}
+
+# Accept near-misses rather than failing on them.
+function Resolve-ComponentName {
+  param([string]$Name)
+  switch ($Name.ToLowerInvariant()) {
+    'powershell'      { 'pwsh' }
+    'profile'         { 'pwsh' }
+    'neovim'          { 'nvim' }
+    'vim'             { 'nvim'}
+    'omp'             { 'prompt' }
+    'oh-my-posh'      { 'prompt' }
+    'fonts'           { 'font' }
+    'tools'           { 'cli' }
+    'windowsterminal' { 'terminal' }
+    'wt'              { 'terminal' }
+    default           { $Name.ToLowerInvariant() }
+  }
+}
+
+# An unknown name is fatal: silently ignoring a typo would mean quietly not
+# installing something explicitly asked for.
+function Expand-ComponentList {
+  param([string[]]$Names, [string]$Flag)
+  $out = @()
+  foreach ($raw in ($Names -split ',')) {
+    $name = $raw.Trim()
+    if (-not $name) { continue }
+    $name = Resolve-ComponentName $name
+    if ($AllComponents -notcontains $name) {
+      Show-Components
+      throw "Unknown component for $Flag : $name"
+    }
+    $out += $name
+  }
+  if ($out.Count -eq 0) { throw "$Flag needs at least one component name" }
+  return $out
+}
+
+$script:Selected = @()
+
+function Resolve-Selection {
+  if ($Only -and $Skip) {
+    throw '-Only and -Skip are mutually exclusive'
+  }
+
+  # wsl is opt-in: it installs a distro and needs a reboot on some machines,
+  # which is too invasive to happen unless asked for. So it is excluded from the
+  # default set, and -Skip subtracts from that default rather than from
+  # everything - otherwise `-Skip nvim` would silently opt you into installing
+  # WSL. Only -WithWSL or naming it in -Only turns it on.
+  $defaultSet = @($AllComponents | Where-Object { $_ -ne 'wsl' })
+
+  if ($Only) {
+    $want = Expand-ComponentList -Names $Only -Flag '-Only'
+    # Intersect against $AllComponents so dependency order is preserved
+    # regardless of the order given on the command line.
+    $script:Selected = @($AllComponents | Where-Object { $want -contains $_ })
+  } elseif ($Skip) {
+    $drop = Expand-ComponentList -Names $Skip -Flag '-Skip'
+    $script:Selected = @($defaultSet | Where-Object { $drop -notcontains $_ })
+  } else {
+    $script:Selected = $defaultSet
+  }
+
+  if ($WithWSL -and $script:Selected -notcontains 'wsl') {
+    $script:Selected += 'wsl'
+  }
+  # Deprecated switch, folded into the component model.
+  if ($SkipWindowsTerminal) {
+    $script:Selected = @($script:Selected | Where-Object { $_ -ne 'terminal' })
+  }
+}
+
+function Test-Want {
+  param([string]$Component)
+  $script:Selected -contains $Component
+}
+
+# Wraps a package install so -ConfigsOnly turns it into a no-op.
+function Invoke-Pkg {
+  param([scriptblock]$Action)
+  if ($ConfigsOnly) { return }
+  & $Action
 }
 
 # ---- File placement --------------------------------------------------------
@@ -147,21 +278,25 @@ function Install-WingetPackage {
   }
 }
 
-function Install-BasePackages {
+function Assert-Winget {
   if (-not (Test-Command 'winget')) {
     throw 'winget not found. Install "App Installer" from the Microsoft Store, then re-run.'
   }
+}
 
-  Install-WingetPackage -Id 'Microsoft.PowerShell'        -Label 'PowerShell 7'      -ProbeCommand 'pwsh'
-  Install-WingetPackage -Id 'Microsoft.WindowsTerminal'   -Label 'Windows Terminal'
-  Install-WingetPackage -Id 'Git.Git'                     -Label 'Git'              -ProbeCommand 'git'
-  Install-WingetPackage -Id 'JanDeDobbeleer.OhMyPosh'     -Label 'Oh My Posh'       -ProbeCommand 'oh-my-posh'
-  Install-WingetPackage -Id 'Neovim.Neovim'               -Label 'Neovim'           -ProbeCommand 'nvim'
-  Install-WingetPackage -Id 'eza-community.eza'           -Label 'eza'              -ProbeCommand 'eza'
-  Install-WingetPackage -Id 'junegunn.fzf'                -Label 'fzf'              -ProbeCommand 'fzf'
-  Install-WingetPackage -Id 'BurntSushi.ripgrep.MSVC'     -Label 'ripgrep'          -ProbeCommand 'rg'
-  Install-WingetPackage -Id 'sharkdp.fd'                  -Label 'fd'               -ProbeCommand 'fd'
-  Install-WingetPackage -Id 'ajeetdsouza.zoxide'          -Label 'zoxide'           -ProbeCommand 'zoxide'
+function Install-CorePackages {
+  Assert-Winget
+  Install-WingetPackage -Id 'Microsoft.PowerShell'      -Label 'PowerShell 7'     -ProbeCommand 'pwsh'
+  Install-WingetPackage -Id 'Git.Git'                   -Label 'Git'              -ProbeCommand 'git'
+}
+
+function Install-CliPackages {
+  Assert-Winget
+  Install-WingetPackage -Id 'eza-community.eza'         -Label 'eza'              -ProbeCommand 'eza'
+  Install-WingetPackage -Id 'junegunn.fzf'              -Label 'fzf'              -ProbeCommand 'fzf'
+  Install-WingetPackage -Id 'BurntSushi.ripgrep.MSVC'   -Label 'ripgrep'          -ProbeCommand 'rg'
+  Install-WingetPackage -Id 'sharkdp.fd'                -Label 'fd'               -ProbeCommand 'fd'
+  Install-WingetPackage -Id 'ajeetdsouza.zoxide'        -Label 'zoxide'           -ProbeCommand 'zoxide'
 }
 
 function Install-PowerShellModules {
@@ -219,30 +354,71 @@ function Install-NerdFont {
 
 # ---- Configs ---------------------------------------------------------------
 
-function Install-Configs {
-  Write-Log 'Placing configs'
+# ---- Components ------------------------------------------------------------
+# One function per component, owning both its packages and its configs, so
+# skipping a component leaves no orphaned config behind.
+#
+# No ghostty or herdr component here: neither has a native Windows build. Both
+# are configured on the WSL side by install.sh via the 'wsl' component.
 
-  # PowerShell 7 keeps its profile under Documents\PowerShell. CurrentUserAllHosts
-  # (profile.ps1) rather than CurrentUserCurrentHost, so the profile also applies
-  # when pwsh is hosted by VS Code or the ISE.
-  $profileTarget = $PROFILE.CurrentUserAllHosts
-  New-ConfigLink -Source (Join-Path $ConfigDir 'powershell\profile.ps1') -Target $profileTarget
+function Component-Core {
+  Invoke-Pkg { Install-CorePackages }
+}
 
+function Component-Cli {
+  Invoke-Pkg { Install-CliPackages }
+}
+
+function Component-Font {
+  Invoke-Pkg { Install-NerdFont }
+}
+
+function Component-Pwsh {
+  Invoke-Pkg { Install-PowerShellModules }
+
+  # PowerShell 7 keeps its profile under Documents\PowerShell.
+  # CurrentUserAllHosts (profile.ps1) rather than CurrentUserCurrentHost, so it
+  # applies when pwsh is hosted by VS Code or the ISE too.
+  New-ConfigLink -Source (Join-Path $ConfigDir 'powershell\profile.ps1') `
+                 -Target $PROFILE.CurrentUserAllHosts
+
+  New-ConfigLink -Source (Join-Path $ConfigDir 'opencode\opencode.jsonc') `
+                 -Target (Join-Path $HOME '.config\opencode\opencode.jsonc')
+}
+
+function Component-Prompt {
+  Invoke-Pkg {
+    Assert-Winget
+    Install-WingetPackage -Id 'JanDeDobbeleer.OhMyPosh' -Label 'Oh My Posh' -ProbeCommand 'oh-my-posh'
+  }
   # Same theme file as Linux/macOS, at the same $HOME-relative path, so
   # profile.ps1 and .zshrc can both point at it unchanged.
   New-ConfigLink -Source (Join-Path $ConfigDir 'omp-config\myconfig.json') `
                  -Target (Join-Path $HOME 'omp-config\myconfig.json')
+}
 
+function Component-Nvim {
+  Invoke-Pkg {
+    Assert-Winget
+    Install-WingetPackage -Id 'Neovim.Neovim' -Label 'Neovim' -ProbeCommand 'nvim'
+  }
   # Neovim on Windows reads %LOCALAPPDATA%\nvim, not ~/.config/nvim.
   New-ConfigLink -Source (Join-Path $ConfigDir 'nvim') `
                  -Target (Join-Path $env:LOCALAPPDATA 'nvim')
 
-  New-ConfigLink -Source (Join-Path $ConfigDir 'opencode\opencode.jsonc') `
-                 -Target (Join-Path $HOME '.config\opencode\opencode.jsonc')
+  if (-not $ConfigsOnly) { Initialize-NeovimPlugins }
+}
 
-  # No ghostty or herdr config here: Ghostty has no Windows build, and herdr has
-  # no native Windows build either. Both are configured on the WSL side by
-  # install.sh when -WithWSL is used.
+function Component-Terminal {
+  Invoke-Pkg {
+    Assert-Winget
+    Install-WingetPackage -Id 'Microsoft.WindowsTerminal' -Label 'Windows Terminal'
+  }
+  Merge-WindowsTerminalSettings
+}
+
+function Component-Wsl {
+  Install-WSLSetup
 }
 
 # ---- Windows Terminal ------------------------------------------------------
@@ -405,6 +581,9 @@ function Install-WSLSetup {
   # /mnt/c is slow, and symlinks created from a DrvFs path do not behave as the
   # Linux installer expects.
   $originUrl = Get-RepoOriginUrl
+  # -WSLArgs is forwarded verbatim, so the Linux side can be scoped
+  # independently of the Windows side: -WSLArgs '--skip tmux,nvim'.
+  if ($WSLArgs) { Write-Log "Passing to install.sh: $WSLArgs" }
   Write-Log "Running install.sh inside $WSLDistro"
   $script = @"
 set -e
@@ -413,7 +592,7 @@ if [ -d "`$HOME/Terminal-setup/.git" ]; then
 else
   git clone $originUrl "`$HOME/Terminal-setup"
 fi
-bash "`$HOME/Terminal-setup/install.sh"
+bash "`$HOME/Terminal-setup/install.sh" $WSLArgs
 "@
 
   try {
@@ -426,35 +605,35 @@ bash "`$HOME/Terminal-setup/install.sh"
 # ---- Main ------------------------------------------------------------------
 
 function Main {
+  if ($List) { Show-Components; return }
+
+  Resolve-Selection
+
   Write-Log "Platform: Windows / $env:PROCESSOR_ARCHITECTURE (PowerShell $($PSVersionTable.PSVersion))"
+  Write-Log ("Components: " + ($script:Selected -join ' '))
+  if ($ConfigsOnly) { Write-Log '-ConfigsOnly: no packages will be installed' }
 
   if ($PSVersionTable.PSVersion.Major -lt 7) {
     Write-Warn 'Running under PowerShell 5.1. The profile targets PowerShell 7 - after this finishes, re-run it from pwsh so the profile lands in the right place.'
   }
 
-  if (-not $ConfigsOnly) {
-    Install-BasePackages
-    Install-PowerShellModules
-    Install-NerdFont
-  } else {
-    Write-Log '-ConfigsOnly: skipping package installs'
+  # -Only means only: warn by name rather than installing prerequisites behind
+  # the user's back.
+  if ($Only -and -not (Test-Want 'core')) {
+    foreach ($tool in @('git')) {
+      if (-not (Test-Command $tool)) {
+        Write-Warn "'$tool' is not installed and 'core' is not in -Only; some steps will fail. Add core, or install $tool first."
+      }
+    }
   }
 
-  Install-Configs
-
-  if ($SkipWindowsTerminal) {
-    Write-Log '-SkipWindowsTerminal: leaving settings.json alone'
-  } else {
-    Merge-WindowsTerminalSettings
+  foreach ($component in $script:Selected) {
+    # 'pwsh' -> Component-Pwsh
+    $fn = 'Component-' + $component.Substring(0,1).ToUpperInvariant() + $component.Substring(1)
+    & $fn
   }
 
-  if (-not $ConfigsOnly) {
-    Initialize-NeovimPlugins
-  }
-
-  if ($WithWSL) {
-    Install-WSLSetup
-  } else {
+  if (-not (Test-Want 'wsl')) {
     Write-Log 'Native Windows setup done. herdr/tmux keybindings (prefix ctrl+a, prefix+|, prefix+h/j/k/l) need WSL - re-run with -WithWSL to get them.'
   }
 
