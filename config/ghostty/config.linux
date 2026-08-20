@@ -1,0 +1,24 @@
+# Ghostty — Linux / GTK only (includes WSL2 rendered through WSLg)
+# Appended to config.shared by install.sh. @@ENV@@ and @@ZSH@@ are substituted
+# with absolute paths at install time.
+
+# ---- Window ----------------------------------------------------------------
+window-decoration = auto
+# Open maximized, NOT fullscreen. fullscreen = true hides the titlebar outright,
+# which is why no minimise/maximise/close buttons were reachable under WSLg.
+# ctrl+enter still toggles true fullscreen; ctrl+shift+m toggles maximise.
+maximize = true
+fullscreen = false
+# One process backing every window — noticeably faster new-window under WSLg.
+gtk-single-instance = true
+
+# ---- Shell -----------------------------------------------------------------
+# Launching `ghostty` from inside a multiplexer pane leaks that multiplexer's
+# session vars into the new surface, so the auto-start guard in .zshrc sees them
+# non-empty and skips starting one at all. gtk-single-instance makes that stick:
+# the daemon holds the stale values for every window it later spawns. Ghostty's
+# `env` key can only add variables, not scrub inherited ones, so strip them as
+# the shell is spawned. Harmless when Ghostty is launched from a clean
+# environment. HERDR_* mirrors the TMUX_* case — herdr exports HERDR_SESSION,
+# HERDR_PANE_ID and HERDR_SOCKET_PATH into every pane.
+command = direct:@@ENV@@ -u HERDR_SESSION -u HERDR_PANE_ID -u HERDR_SOCKET_PATH -u TMUX -u TMUX_PANE -u WT_SESSION -u WT_PROFILE_ID @@ZSH@@

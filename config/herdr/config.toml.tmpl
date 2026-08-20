@@ -1,0 +1,155 @@
+# herdr — cross-platform (Linux incl. WSL2, macOS)
+#
+# GENERATED FILE WARNING: install.sh renders this template to
+# ~/.config/herdr/config.toml, substituting @@ZSH@@ with the absolute zsh path
+# for the platform. TOML has no include directive and herdr needs the literal
+# path, which is why this is a template rather than a symlink. Edit this file
+# in the repo, not the generated one, then re-run install.sh.
+#
+# Full annotated reference: herdr --default-config
+# Validate a rendered config:  herdr config check
+# Apply without restarting:    herdr server reload-config
+# (or prefix+shift+R from inside herdr)
+#
+# Ported from tmux/.tmux.conf, verified against the v0.8.2 schema. Every key
+# below appears in `herdr --default-config`. Where tmux had no equivalent the
+# difference is called out inline — herdr has no `if-shell`, so a few tmux
+# tricks have no translation.
+
+onboarding = false
+
+# ---- Keys ------------------------------------------------------------------
+[keys]
+# Same prefix as tmux (unbind C-b / set -g prefix C-a), so muscle memory
+# carries over and ctrl+b stays free.
+prefix = "ctrl+a"
+
+# tmux's detach is prefix+d; herdr defaults to prefix+q. Ported to prefix+d.
+# prefix+shift+d is close_workspace, so there is no collision.
+detach = "prefix+d"
+
+# Tabs are herdr's windows. tmux used prefix+c for new-window with cwd inherit;
+# the cwd part is [terminal].new_cwd = "follow" below, not a key flag.
+new_tab = "prefix+c"
+next_tab = "prefix+n"
+previous_tab = "prefix+p"
+switch_tab = "prefix+1..9"
+
+# Splits. herdr names these by the resulting pane arrangement, matching tmux's
+# sense rather than inverting it: split_vertical is side by side (tmux `bind |`),
+# split_horizontal is stacked (tmux `bind -`).
+# Both are identical to the old tmux bindings. The literal `|` is required —
+# "prefix+pipe" fails validation, and "prefix+shift+backslash" also parses if
+# Ghostty ever stops delivering the shifted character.
+split_vertical = "prefix+|"
+split_horizontal = "prefix+minus"
+
+# Pane focus on bare ctrl+h/j/k/l, no prefix — identical to the tmux config's
+# `bind -n C-h ...`. These are direct terminal-mode shortcuts, so herdr consumes
+# them GLOBALLY. tmux wrapped them in `if-shell "$is_vim"` to forward the key to
+# nvim when the pane was running vim/nvim/fzf; herdr has no conditional binding,
+# so nvim's own ctrl+h/j/k/l split navigation is shadowed while inside herdr.
+# The fix, if that bites, is on the nvim side rather than here: a keymap that
+# moves within nvim when a neighbouring split exists and otherwise shells out to
+# `herdr pane focus <dir>` — the vim-tmux-navigator pattern, inverted.
+# NOTE: these override herdr's defaults, which put focus on prefix+h/j/k/l —
+# freeing prefix+h/j/k/l for the resize bindings below.
+focus_pane_left = "ctrl+h"
+focus_pane_down = "ctrl+j"
+focus_pane_up = "ctrl+k"
+focus_pane_right = "ctrl+l"
+
+# tmux had `bind m resize-pane -Z`. herdr calls the action `zoom` (default
+# prefix+z), rebound here to prefix+m.
+zoom = "prefix+m"
+
+# Direct resize, matching tmux's repeatable `bind -r h resize-pane -L 3`:
+#   prefix+h -> shrink left / grow leftward
+#   prefix+j -> down
+#   prefix+k -> up
+#   prefix+l -> right
+# These are the optional resize_pane_* keys (v0.8.2), which resize WITHOUT
+# entering resize mode. Only free because focus_pane_* was moved to bare
+# ctrl+h/j/k/l above. Unlike tmux's -r flag herdr has no repeat timeout, so
+# each press needs the prefix again; resize_mode below is the fast path for a
+# long resize.
+resize_pane_left = "prefix+h"
+resize_pane_down = "prefix+j"
+resize_pane_up = "prefix+k"
+resize_pane_right = "prefix+l"
+
+# Enter once, then bare h/j/k/l resize repeatedly until esc. Cheaper than
+# re-pressing the prefix when nudging a pane a long way.
+# NOTE: tmux's prefix+r was "reload config". Here prefix+r enters resize mode
+# and reload is prefix+shift+R.
+resize_mode = "prefix+r"
+
+goto = "prefix+g"
+
+# Agent panel navigation. Unbound by default; prefix+[ / prefix+] walk the panel
+# in its current sort order, prefix+alt+<n> jumps straight to the nth agent.
+# macOS needs `macos-option-as-alt = true` in ghostty/config.macos for the alt
+# variants to arrive at all.
+previous_agent = "prefix+["
+next_agent = "prefix+]"
+focus_agent = "prefix+alt+1..9"
+
+# ---- Terminal --------------------------------------------------------------
+[terminal]
+# tmux: set -g default-shell / default-command "/usr/bin/zsh"
+# Substituted per platform by install.sh: /usr/bin/zsh on Debian, /bin/zsh on
+# stock macOS, $(brew --prefix)/bin/zsh when Homebrew's zsh is installed.
+default_shell = "@@ZSH@@"
+shell_mode = "non_login"
+# tmux: -c "#{pane_current_path}" on every split and new-window binding.
+new_cwd = "follow"
+
+# ---- Theme -----------------------------------------------------------------
+[theme]
+# Ghostty's #0a0a0a + cyan scheme (ghostty/config.shared) shows through the
+# custom overrides below rather than being overpainted.
+name = "tokyo-night"
+# This setup is dark only; nothing to switch between.
+auto_switch = false
+
+[theme.custom]
+panel_bg = "#0a0a0a"
+sidebar_bg = "#0a0a0a"
+active_row_bg = "#163b44"
+selection_bg = "#163b44"
+accent = "#22d3ee"
+
+# ---- UI --------------------------------------------------------------------
+[ui]
+# tmux: set -g status-position top
+tab_bar_position = "top"
+# Rough equivalent of the old tmux status-right (󰃭 %b %d │ 󰥔 %H:%M).
+tab_bar_right = [
+  { type = "zoom" },
+  { type = "datetime", format = "󰃭 %d %b" },
+  { type = "datetime", format = "󰥔 %H:%M" },
+]
+tab_bar_right_separator = " │ "
+# Distinct glyphs per agent state rather than compact colour dots.
+status_indicators = "symbols"
+
+show_agent_labels_on_pane_borders = true
+[ui.toast]
+delivery = "herdr"
+
+# ---- Not carried over from tmux --------------------------------------------
+# 1. The is_vim passthrough guard on ctrl+h/j/k/l. The keys themselves ARE
+#    ported (see [keys] above); only tmux's conditional forwarding to nvim is
+#    gone, because herdr has no `if-shell`.
+#    herdr's navigate_pane_* keys are a separate mechanism: bare h/j/k/l that
+#    only apply while the navigate-mode overlay is open.
+# 2. TERM/terminal-features tuning (Tc, RGB, usstyle, hyperlinks, extended-keys,
+#    allow-passthrough). herdr negotiates capabilities directly rather than from
+#    a terminfo database, so there is nothing to declare.
+# 3. set-clipboard on / OSC 52. Ghostty handles this at the terminal layer —
+#    clipboard-read/clipboard-write are already `allow` in ghostty/config.shared.
+# 4. TPM and tmux-sensible. herdr has its own plugin system: herdr plugin install.
+# 5. base-index 1 / renumber-windows / automatic-rename. herdr manages tab
+#    identity and numbering internally.
+# 6. mode-keys vi. herdr's scrollback uses prefix+e (edit_scrollback), which
+#    opens the buffer in $EDITOR — nvim, so vi keys apply there anyway.

@@ -1,0 +1,24 @@
+# Ghostty — macOS only
+# Appended to config.shared by install.sh. @@ENV@@ and @@ZSH@@ are substituted
+# with absolute paths at install time.
+#
+# Not carried over from config.linux: window-decoration, maximize, fullscreen
+# and gtk-single-instance are all GTK-only keys. macOS uses native window
+# management, and Ghostty already runs as a single AppKit process.
+
+# ---- Keys ------------------------------------------------------------------
+# REQUIRED for keybinding parity. Without this, macOS swallows option as a
+# dead-key compose modifier and herdr never receives prefix+alt+1..9
+# (focus_agent). Both option keys behave as alt.
+macos-option-as-alt = true
+
+# ---- Window ----------------------------------------------------------------
+# Blend the titlebar into the #0a0a0a background instead of the light chrome.
+macos-titlebar-style = transparent
+window-save-state = always
+
+# ---- Shell -----------------------------------------------------------------
+# Same env scrub as Linux: keeps a Ghostty window launched from inside a
+# herdr/tmux pane from inheriting that session's vars, which would make the
+# auto-start guard in .zshrc skip starting a multiplexer at all.
+command = direct:@@ENV@@ -u HERDR_SESSION -u HERDR_PANE_ID -u HERDR_SOCKET_PATH -u TMUX -u TMUX_PANE -u WT_SESSION -u WT_PROFILE_ID @@ZSH@@
