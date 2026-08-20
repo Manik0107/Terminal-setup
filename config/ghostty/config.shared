@@ -41,10 +41,24 @@ keybind = ctrl+shift+m=toggle_maximize
 # ---- Behaviour -------------------------------------------------------------
 mouse-hide-while-typing = true
 copy-on-select = clipboard
-# OSC 52 both ways. This is the real win under WSL: there is no wl-copy,
-# xclip or win32yank there, so tmux yank reaching the Windows clipboard
-# depends on it entirely.
-clipboard-read = allow
+# OSC 52 WRITE is the real win under WSL: there is no wl-copy, xclip or
+# win32yank there, so tmux yank reaching the Windows clipboard depends on it
+# entirely. That is `set -g set-clipboard on` in .tmux.conf, and it needs
+# clipboard-write only.
+#
+# Read is the opposite direction and a separate permission. `allow` would let
+# any program in the terminal silently read the system clipboard over OSC 52 -
+# including a compromised host you have SSH'd into - and a clipboard routinely
+# holds password-manager output. `ask` is Ghostty's own default.
+#
+# This does NOT affect ctrl+v: paste_from_clipboard is a terminal keybind
+# action, not a program request, so it never consults clipboard-read. Only a
+# program asking to read the clipboard prompts. The one case where that can
+# happen here is pasting into Neovim with `p` (LazyVim sets
+# clipboard=unnamedplus) when the text was copied from a Windows app rather
+# than yanked in nvim - nvim then falls back to a real OSC 52 read. Use ctrl+v
+# for that, or allow the prompt.
+clipboard-read = ask
 clipboard-write = allow
 clipboard-trim-trailing-spaces = true
 # herdr owns real scrollback; keep Ghostty's buffer modest.
