@@ -101,10 +101,21 @@ render_file() {
 # Absolute path to zsh. tmux, herdr and Ghostty all need this literal, and it
 # differs per platform: /usr/bin/zsh on Debian, /bin/zsh on macOS stock,
 # /opt/homebrew/bin/zsh when Homebrew's newer zsh is installed.
+#
+# Falls back rather than aborting: with a selective install such as
+# `--only herdr`, zsh may legitimately not be present yet. A generated config
+# pointing at a not-yet-installed path is recoverable (install zsh, re-run);
+# aborting the whole run is not.
 zsh_path() {
   local p
   p="$(command -v zsh 2>/dev/null || true)"
-  [[ -n "$p" ]] || die "zsh not found on PATH after install"
+  if [[ -z "$p" ]]; then
+    case "$OS_NAME" in
+      macos) p="/bin/zsh" ;;
+      *)     p="/usr/bin/zsh" ;;
+    esac
+    warn "zsh not found on PATH; generated configs will point at $p. Install zsh (or run without --only/--skip) and re-run to correct it."
+  fi
   printf '%s' "$p"
 }
 
